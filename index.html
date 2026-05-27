@@ -1,250 +1,285 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>五子棋 - 高阶人机对战</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: Arial, sans-serif;
-        }
-
-        body {
-            background: #f0f4f8;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-            gap: 20px;
-            padding: 20px;
-        }
-
-        h1 {
-            color: #2d3748;
-            font-size: 28px;
-        }
-
-        .status {
-            font-size: 18px;
-            color: #4a5568;
-            font-weight: bold;
-            min-height: 24px;
-        }
-
-        .board {
-            display: grid;
-            grid-template-columns: repeat(15, 28px);
-            background: #e6c9a5;
-            padding: 10px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
-        }
-
-        .cell {
-            width: 28px;
-            height: 28px;
-            border: 1px solid #8c6a3f;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-        }
-
-        .black, .white {
-            width: 22px;
-            height: 22px;
-            border-radius: 50%;
-        }
-
-        .black {
-            background: #000;
-        }
-
-        .white {
-            background: #fff;
-            border: 1px solid #ddd;
-        }
-
-        .reset {
-            padding: 10px 20px;
-            background: #38a169;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-    </style>
+<meta charset="UTF-8" />
+<title>五子棋 - 人机对战（带格子线+最后一步标记）</title>
+<style>
+  body {
+    font-family: "Microsoft YaHei", sans-serif;
+    background: #f5f5f5;
+    text-align: center;
+    margin: 0;
+    padding: 20px;
+  }
+  h1 {
+    color: #333;
+  }
+  #board {
+    display: inline-block;
+    border: 2px solid #8b4513;
+    background: #deb887;
+    padding: 10px;
+    border-radius: 8px;
+  }
+  .row {
+    display: flex;
+  }
+  .cell {
+    width: 30px;
+    height: 30px;
+    position: relative;
+    /* 绘制格子线 */
+    background-image: 
+      linear-gradient(#8b4513 1px, transparent 1px),
+      linear-gradient(90deg, #8b4513 1px, transparent 1px);
+    background-size: 30px 30px;
+  }
+  .piece {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+  }
+  .black {
+    background: #000;
+  }
+  .white {
+    background: #fff;
+    border: 1px solid #ccc;
+  }
+  /* 最后一步标记：黑棋白点、白棋红点 */
+  .last-black::after {
+    content: "";
+    width: 8px;
+    height: 8px;
+    background: #fff;
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .last-white::after {
+    content: "";
+    width: 8px;
+    height: 8px;
+    background: red;
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+  #info {
+    margin: 15px 0;
+    font-size: 18px;
+  }
+  button {
+    padding: 8px 16px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+</style>
 </head>
 <body>
-    <h1>五子棋（高阶人机对战）</h1>
-    <div class="status" id="tip">轮到你落子（黑棋）</div>
-    <div class="board" id="board"></div>
-    <button class="reset" onclick="resetGame()">重新开始</button>
+<h1>五子棋（人机对战）</h1>
+<div id="info">你执黑先行</div>
+<div id="board"></div>
+<div style="margin-top:15px;">
+  <button onclick="restartGame()">重新开始</button>
+</div>
 
-    <script>
-        const size = 15;
-        let board = Array(size * size).fill(0);
-        const PLAYER = 1;
-        const COMPUTER = 2;
-        let gameOver = false;
-        const tip = document.getElementById('tip');
-        const dirs = [[1, 0], [0, 1], [1, 1], [1, -1]];
+<script>
+const BOARD_SIZE = 15;
+let board = [];
+let currentPlayer = "black";
+let gameOver = false;
 
-        function render() {
-            const b = document.getElementById('board');
-            b.innerHTML = '';
-            board.forEach((v, i) => {
-                const c = document.createElement('div');
-                c.className = 'cell';
-                if (v === PLAYER) c.innerHTML = '<div class="black"></div>';
-                if (v === COMPUTER) c.innerHTML = '<div class="white"></div>';
-                c.onclick = () => place(i);
-                b.appendChild(c);
-            });
+// 记录最后一步位置
+let lastMove = null;
+
+// 初始化棋盘
+function initBoard() {
+  const boardEl = document.getElementById("board");
+  boardEl.innerHTML = "";
+  board = Array(BOARD_SIZE).fill().map(() => Array(BOARD_SIZE).fill(null));
+  lastMove = null;
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    const rowEl = document.createElement("div");
+    rowEl.className = "row";
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      const cellEl = document.createElement("div");
+      cellEl.className = "cell";
+      cellEl.dataset.r = r;
+      cellEl.dataset.c = c;
+      cellEl.addEventListener("click", () => humanMove(r, c));
+      rowEl.appendChild(cellEl);
+    }
+    boardEl.appendChild(rowEl);
+  }
+}
+
+// 人类落子
+function humanMove(r, c) {
+  if (gameOver || board[r][c]) return;
+  board[r][c] = "black";
+  currentPlayer = "white";
+  updateBoard();
+  if (checkWin(r, c, "black")) {
+    gameOver = true;
+    document.getElementById("info").textContent = "你赢了！";
+    return;
+  }
+  document.getElementById("info").textContent = "电脑思考中...";
+  setTimeout(aiMove, 600);
+}
+
+// 电脑AI（较强）
+function aiMove() {
+  let best = null;
+  let bestScore = -Infinity;
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      if (!board[r][c]) {
+        let score = evaluate(r, c);
+        if (score > bestScore) {
+          bestScore = score;
+          best = { r, c };
         }
+      }
+    }
+  }
+  if (best) {
+    board[best.r][best.c] = "white";
+    currentPlayer = "black";
+    updateBoard();
+    if (checkWin(best.r, best.c, "white")) {
+      gameOver = true;
+      document.getElementById("info").textContent = "电脑赢了！";
+      return;
+    }
+    document.getElementById("info").textContent = "你的回合（黑）";
+  }
+}
 
-        function getPos( idx ){
-            return { x: idx % size, y: Math.floor(idx / size) };
+// 评分函数（进攻+防守）
+function evaluate(r, c) {
+  const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+  let score = 0;
+  // 电脑自己的连线
+  for (let [dr, dc] of dirs) {
+    score += countLine(r, c, dr, dc, "white") * 10;
+  }
+  // 防守：人类连线
+  for (let [dr, dc] of dirs) {
+    score += countLine(r, c, dr, dc, "black") * 12;
+  }
+  return score;
+}
+
+function countLine(r, c, dr, dc, color) {
+  let cnt = 1;
+  for (let i = 1; i < 5; i++) {
+    let nr = r + dr*i;
+    let nc = c + dc*i;
+    if (nr>=0 && nr<BOARD_SIZE && nc>=0 && nc<BOARD_SIZE && board[nr][nc]===color) cnt++;
+    else break;
+  }
+  for (let i = 1; i < 5; i++) {
+    let nr = r - dr*i;
+    let nc = c - dc*i;
+    if (nr>=0 && nr<BOARD_SIZE && nc>=0 && nc<BOARD_SIZE && board[nr][nc]===color) cnt++;
+    else break;
+  }
+  return cnt;
+}
+
+// 检查胜利
+function checkWin(r, c, color) {
+  const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+  for (let [dr, dc] of dirs) {
+    let cnt = 1;
+    for (let i = 1; i < 5; i++) {
+      let nr = r + dr*i;
+      let nc = c + dc*i;
+      if (nr>=0 && nr<BOARD_SIZE && nc>=0 && nc<BOARD_SIZE && board[nr][nc]===color) cnt++;
+      else break;
+    }
+    for (let i = 1; i < 5; i++) {
+      let nr = r - dr*i;
+      let nc = c - dc*i;
+      if (nr>=0 && nr<BOARD_SIZE && nc>=0 && nc<BOARD_SIZE && board[nr][nc]===color) cnt++;
+      else break;
+    }
+    if (cnt >= 5) return true;
+  }
+  return false;
+}
+
+// 更新棋盘UI（带最后一步标记）
+function updateBoard() {
+  // 清除旧标记
+  if (lastMove) {
+    let old = document.querySelector(
+      `.cell[data-r="${lastMove.r}"][data-c="${lastMove.c}"] .piece`
+    );
+    if (old) {
+      old.classList.remove("last-black", "last-white");
+    }
+  }
+
+  // 重绘所有棋子
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      const cell = document.querySelector(`.cell[data-r="${r}"][data-c="${c}"]`);
+      // 只清空棋子，保留格子线背景
+      const existingPiece = cell.querySelector('.piece');
+      if (existingPiece) {
+        cell.removeChild(existingPiece);
+      }
+      if (board[r][c]) {
+        const piece = document.createElement("div");
+        piece.className = "piece " + board[r][c];
+        cell.appendChild(piece);
+      }
+    }
+  }
+
+  // 设置新标记
+  let foundNewMove = false;
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      if (board[r][c] && (r !== lastMove?.r || c !== lastMove?.c)) {
+        lastMove = { r, c };
+        const piece = document.querySelector(
+          `.cell[data-r="${r}"][data-c="${c}"] .piece`
+        );
+        if (piece) {
+          if (board[r][c] === "black") {
+            piece.classList.add("last-black");
+          } else {
+            piece.classList.add("last-white");
+          }
         }
+        foundNewMove = true;
+        break;
+      }
+    }
+    if (foundNewMove) break;
+  }
+}
 
-        function getIdx( x, y ){
-            return y * size + x;
-        }
+function restartGame() {
+  gameOver = false;
+  currentPlayer = "black";
+  document.getElementById("info").textContent = "你执黑先行";
+  initBoard();
+}
 
-        // 统计单个方向连续棋子 & 两端空位
-        function countLine(x, y, dx, dy, player) {
-            let cnt = 1;
-            let leftEmpty = 0, rightEmpty = 0;
-            let nx = x + dx, ny = y + dy;
-            while(nx >=0 && nx < size && ny >=0 && ny < size && board[getIdx(nx, ny)] === player){
-                cnt++;
-                nx += dx; ny += dy;
-            }
-            if(nx >=0 && nx < size && ny >=0 && ny < size && board[getIdx(nx, ny)] === 0) rightEmpty = 1;
-
-            nx = x - dx; ny = y - dy;
-            while(nx >=0 && nx < size && ny >=0 && ny < size && board[getIdx(nx, ny)] === player){
-                cnt++;
-                nx -= dx; ny -= dy;
-            }
-            if(nx >=0 && nx < size && ny >=0 && ny < size && board[getIdx(nx, ny)] === 0) leftEmpty = 1;
-
-            return { count: cnt, empty: leftEmpty + rightEmpty };
-        }
-
-        // 对空位打分：识别五子/活四/冲四/活三/眠三/活二/眠二
-        function getScore(idx, role) {
-            const {x, y} = getPos(idx);
-            let total = 0;
-            const enemy = role === PLAYER ? COMPUTER : PLAYER;
-
-            for(let [dx, dy] of dirs){
-                let res = countLine(x, y, dx, dy, role);
-                let c = res.count, e = res.empty;
-
-                if(c >= 5) total += 100000;
-                else if(c === 4 && e === 2) total += 10000;
-                else if(c === 4 && e === 1) total += 5000;
-                else if(c === 3 && e === 2) total += 1000;
-                else if(c === 3 && e === 1) total += 500;
-                else if(c === 2 && e === 2) total += 100;
-                else if(c === 2 && e === 1) total += 50;
-            }
-
-            // 防守分：对手威胁权重更高
-            for(let [dx, dy] of dirs){
-                let res = countLine(x, y, dx, dy, enemy);
-                let c = res.count, e = res.empty;
-
-                if(c >= 5) total += 100000;
-                else if(c === 4 && e === 2) total += 12000;
-                else if(c === 4 && e === 1) total += 6000;
-                else if(c === 3 && e === 2) total += 1200;
-                else if(c === 3 && e === 1) total += 600;
-                else if(c === 2 && e === 2) total += 120;
-                else if(c === 2 && e === 1) total += 60;
-            }
-
-            // 中心位置加分
-            let center = Math.abs(x - 7) + Math.abs(y - 7);
-            total += (14 - center) * 2;
-            return total;
-        }
-
-        // AI 选最优位置
-        function computerMove() {
-            let maxScore = -1;
-            let bestIdx = getIdx(7,7);
-
-            for(let i = 0; i < board.length; i++){
-                if(board[i] !== 0) continue;
-                let s = getScore(i, COMPUTER);
-                if(s > maxScore){
-                    maxScore = s;
-                    bestIdx = i;
-                }
-            }
-
-            board[bestIdx] = COMPUTER;
-            if(checkWin(bestIdx, COMPUTER)){
-                tip.textContent = '电脑获胜，再接再厉！';
-                gameOver = true;
-            } else if(!board.includes(0)){
-                tip.textContent = '棋盘已满，本局平局！';
-                gameOver = true;
-            } else {
-                tip.textContent = '轮到你落子（黑棋）';
-            }
-            render();
-        }
-
-        // 胜负判断
-        function checkWin(idx, player) {
-            const {x, y} = getPos(idx);
-            for(let [dx, dy] of dirs){
-                let res = countLine(x, y, dx, dy, player);
-                if(res.count >= 5) return true;
-            }
-            return false;
-        }
-
-        // 玩家落子
-        function place(idx) {
-            if(board[idx] !== 0 || gameOver){
-                if(board[idx] !== 0) tip.textContent = '此位置已有棋子！';
-                return;
-            }
-            board[idx] = PLAYER;
-            if(checkWin(idx, PLAYER)){
-                tip.textContent = '恭喜！你获得胜利！';
-                gameOver = true;
-                render();
-                return;
-            }
-            if(!board.includes(0)){
-                tip.textContent = '棋盘已满，本局平局！';
-                gameOver = true;
-                render();
-                return;
-            }
-            tip.textContent = '电脑思考中...';
-            render();
-            setTimeout(computerMove, 400);
-        }
-
-        // 重置游戏
-        function resetGame() {
-            board = Array(size * size).fill(0);
-            gameOver = false;
-            tip.textContent = '游戏已重置，轮到你落子（黑棋）';
-            render();
-        }
-
-        render();
-    </script>
+// 启动
+initBoard();
+</script>
 </body>
 </html>
